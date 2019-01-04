@@ -27,8 +27,8 @@ def checksum(arr):
     return sum
 
 
-def empty_params():
+def empty_params(size=10):
     params = []
-    for i in range(0, 10):
+    for i in range(0, size):
         params.append(0)
     return params

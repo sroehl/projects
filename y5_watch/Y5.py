@@ -31,11 +31,11 @@ class Y5(Device):
 
     def characteristic_write_value_succeeded(self, characteristic):
         self.write_lock.release()
-        print("Wrote value correctly")
+        # print("Wrote value correctly")
 
     def characteristic_write_value_failed(self, characteristic, error):
         self.write_lock.release()
-        print("Write value failed: {}".format(error))
+        # print("Write value failed: {}".format(error))
 
     def write_value(self, value, offset=0):
         print("Writing {}".format(value))
@@ -63,6 +63,32 @@ class Y5(Device):
         params[9] = checksum(params)
         self.write_value(params)
 
+    def set_hr_auto(self, auto):
+        if auto:
+            val = 1
+        else:
+            val = 0
+        params = int_to_byte(56, 0, val)
+        self.write_value(params)
+
+    def get_hr(self):
+        hr = self.current_hr
+        self.write_value(int_to_byte(13, 0, 1))
+        while self.current_hr == hr:
+            time.sleep(1)
+        self.write_value(int_to_byte(13, 0, 0))
+
+    def step_history_read(self):
+        # Not really sure what this is supposed to do
+        for i in range(0, 30):
+            params = int_to_byte(28, 0, 0)
+            self.write_value(params)
+            time.sleep(.1)
+
+    def alert(self):
+        # Send 3 vibrates to watch
+        self.write_value(int_to_byte(7, 0, 1))
+
     def print_attributes(self):
         print("Steps: {}".format(self.steps))
         print("Power: {}%".format(self.power))
@@ -75,13 +101,22 @@ class Y5(Device):
         elif value[0] == 253:  # Update max heart
             print("update max heart: {}".format(dbus_to_string(value)))
             pass
-        elif value[0] == 252:  # Update current heart
+        elif value[0] == 252 and value[8] != 0:  # Update current heart
             self.current_hr = value[8]
         elif value[0] == 247:  # Watch power (0xF7)
             self.power = value[8]
             pass
         elif value[0] == 246:  # Save settings? (0xF6)
             print("Save setting: {}".format(dbus_to_string(value)))
+            print("save_de_have_wechat: {}".format((value[1] &0x2) != 2))
+            print("show_english_unit_setting: {}".format((value[1] &0x4) != 4))
+            print("show weather: {}".format((value[1] &0x8) != 8))
+            print("12 hour switch: {}".format((value[1] &0x10) != 16))
+            print("anti_lost: {}".format((value[1] &0x20) != 32))
+            print("show blood pressure: {}".format((value[1] &0x40) != 64))
+            print("show goal step length: {}".format((value[1] &0x80) != 128))
+            print("show sleep setting: {}".format(value[2] != 0))
+            print("save de have heart: {}".format(value[6] != 1))
             pass
         elif value[0] == 245:  # Alarm?
             print("Alarm?: {}".format(dbus_to_string(value)))
@@ -169,7 +204,46 @@ class Y5(Device):
             #print("length is: {}".format(len(message_packet)))
 
     def tick(self):
-        self.write_value(int_to_byte(13, 0, 1))
+        self.write_value(int_to_byte(50, 0, 0))
+        #time.sleep(2)
+        #self.write_value(int_to_byte(13, 0, 0))
+
+    def update_step_length(self, length):
+        # Send the step length converted to cm
+        self.write_value(int_to_byte(63, 0, length * 2.54))
+
+    def update_step_goal(self, goal):
+        self.write_value(int_to_byte(3, 0, goal))
+
+    def update_hr_goal(self, hr_goal):
+        self.write_value(int_to_byte(1, 0, hr_goal))
+
+    def update_alarm(self, alarm_num, hour, minute, disable=False):
+        if alarm_num == 1:
+            cmd_byte = 9
+        elif alarm_num == 2:
+            cmd_byte = 34
+        else:
+            cmd_byte = 35
+        if disable:
+            hour = 25
+            minute = 0
+        self.write_value(int_to_byte(cmd_byte, hour, minute))
+
+    def power_setting(self, bright, vibrate):
+        # Skipping interrupt so just use all day (doesn't really matter)
+        time = 0 << 24 + 0 << 16 + 23 << 8 + 59
+        if vibrate and bright:
+            val = 7
+        elif vibrate and not bright:
+            val = 6
+        elif not vibrate and bright:
+            val = 5
+        elif not vibrate and not bright:
+            val = 4
+        self.write_value(int_to_byte(57, time, val))
+
+
 
     def __init__(self, mac_address, manager, managed=True):
         super().__init__(mac_address, manager, managed)
