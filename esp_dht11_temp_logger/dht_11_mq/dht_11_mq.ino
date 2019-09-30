@@ -3,7 +3,7 @@
 #include <PubSubClient.h>
 #include "config.h"
 
-#define DHTTYPE DHT11   // DHT 11
+#define DHTTYPE DHT22   // DHT 22
 
 // This values are in config.h
 /*const char* ssid = "";
@@ -77,6 +77,8 @@ void setup() {
   }
   Serial.println("");
   Serial.println("WiFi connected");
+  
+  server.begin();
 
 
   client.setServer(mqtt_server, 1883);
@@ -92,20 +94,46 @@ void setup() {
 void loop() {
   // Listenning for new clients
 
+  WiFiClient webClient = server.available();
+
+  if (webClient) {
+    while (client.connected()) {
+      Serial.println("New Client");
+      if (webClient.available()) {
+        String line = webClient.readStringUntil('\r');
+        Serial.print(line);
+        if (line.length() == 1 && line[0] == '\n') {
+          webClient.println("HTTP/1.1 200 OK");
+          webClient.println("Content-type:text/html");
+          webClient.println("Connection: close");
+          webClient.println();
+          webClient.println("<!DOCTYPE html><html>");
+          snprintf (msg, 50, "%s", fahrenheitTemp);
+          webClient.println("<head>Temp</head><body><h1>");
+          webClient.println(msg);
+          webClient.println("</h3></body></html>");
+          break;
+        }
+      }
+    }
+  }
+
   if (!client.connected()) {
     reconnect();
   }
   client.loop();
 
   long now = millis();
-  if (now - lastMsg > 30000) {
-    int loops = 100;
-    for(int i = 0; i < loops; i++){  
-      h += dht.readHumidity();
-      f += dht.readTemperature(true);
+  if (now - lastMsg > 3000) {
+    h = dht.readHumidity();
+    f = dht.readTemperature(true);
+    while (isnan(f)) {
+      long now2 = millis();
+      while (millis() - now2 < 100)
+        ;
+      h = dht.readHumidity();
+      f = dht.readTemperature(true);
     }
-    h = h / loops;
-    f = f / loops;
     lastMsg = now;
     float hif = dht.computeHeatIndex(f, h);
     dtostrf(f, 6, 2, fahrenheitTemp);         

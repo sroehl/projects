@@ -5,16 +5,20 @@ import os
 
 app = Flask(__name__)
 
-last_created = {}
+next_create = 0
 
 @app.route('/')
 def chart():
+    global next_create
     chart_path = os.path.join('resources', 'temp.svg')
-    if 'temp' not in last_created or (last_created['temp'] + (5 *60)) > time.time():
+    print('next: {}'.format(next_create))
+    print(time.time())
+    if time.time() > next_create:
+        print('Creating new graph')
         days = int(request.args.get('days', 7))
-        data_set = load_data_dynamodb(days=days)
+        data_set = load_data(days=days)
         make_line_chart(data_set, chart_path)
-        last_created['temp'] = time.time()
+        next_create = time.time() + 60
     response = make_response(open(chart_path).read())
     response.content_type = 'image/svg+xml'
     return response
