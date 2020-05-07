@@ -7,7 +7,7 @@ class Notebook:
 
     def load_from_file(self, file):
         with open(file, 'r') as json_file:
-            notes_to_load = json.load(json_file)
+            notes_to_load = json.loads(self.encryption.decrypt(json_file.read()))
         for id in notes_to_load:
             json_note = notes_to_load[id]
             note = Note(json_note['text'], json_note['title'], json_note['group'], json_note['tags'])
@@ -21,7 +21,8 @@ class Notebook:
         for note in self.notes:
             notes_to_save[note] = self.notes[note].save()
         with open(file, 'w') as json_file:
-            json.dump(notes_to_save, json_file)
+            json_file.write(str(self.encryption.encrypt(json.dumps(notes_to_save))))
+            #json.dump(self.encryption.encrypt(notes_to_save), json_file)
 
     def add_note(self, note):
         self.notes[note.id] = note
@@ -29,5 +30,6 @@ class Notebook:
     def __iter__(self):
         return (self.notes[note] for note in self.notes.__iter__())
 
-    def __init__(self):
+    def __init__(self, encryption):
+        self.encryption = encryption
         self.notes = {}
